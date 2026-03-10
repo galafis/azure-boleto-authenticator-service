@@ -1,124 +1,184 @@
-# Servico Autenticador de Boletos Bancarios com Azure Functions
+# Brazilian Boleto Authenticator Service / Servico Autenticador de Boletos Bancarios
 
-## Sobre o Projeto
+## English
 
-Este projeto implementa um servico serverless para verificacao e autenticacao de boletos bancarios utilizando Azure Functions. O objetivo e garantir a validade das informacoes contidas nos codigos de barras dos boletos, incluindo validacao de digitos verificadores, identificacao de bancos emissores e decodificacao de informacoes como valor e data de vencimento.
+### About the Project
 
-## Arquitetura da Solucao
+This project implements a service for validation and authentication of Brazilian boleto bancario (bank payment slips). It parses and validates both the 47-digit "linha digitavel" (typed line) and 44-digit barcode formats, verifying check digits using Mod10 and Mod11 algorithms, identifying issuing banks, and extracting payment information such as value and due date.
 
+### Validation Flow
+
+```mermaid
+flowchart TD
+    A[Raw Input] --> B{Detect Format}
+    B -->|47 digits| C[Parse Linha Digitavel]
+    B -->|44 digits| D[Parse Barcode]
+    B -->|Other| E[Return Error]
+    C --> F[Convert to Barcode]
+    D --> G[Convert to Linha Digitavel]
+    F --> H[Extract Bank Code]
+    G --> H
+    H --> I[Lookup Bank Name]
+    I --> J[Extract Value]
+    J --> K[Extract Due Date]
+    K --> L{Validate Check Digits}
+    L --> M[Mod10 - Field 1]
+    L --> N[Mod10 - Field 2]
+    L --> O[Mod10 - Field 3]
+    L --> P[Mod11 - General]
+    M --> Q{All Valid?}
+    N --> Q
+    O --> Q
+    P --> Q
+    Q -->|Yes| R[Return BoletoInfo - Valid]
+    Q -->|No| S[Return BoletoInfo - Invalid + Errors]
 ```
-[Cliente/UI] --> [Azure Functions HTTP Trigger]
-                        |
-            +-----------+-----------+
-            |                       |
-    [fnValidaBoleto]      [fnGeradorBoletos]
-            |                       |
-    - Decodifica barcode    - Gera boleto teste
-    - Valida digitos        - Encode codigo barras
-    - Retorna dados         - Retorna boleto
-```
 
-### Componentes Principais
-
-1. **fnValidaBoleto** - Azure Function responsavel por receber o codigo de barras, decodificar e validar as informacoes do boleto
-2. **fnGeradorBoletos** - Azure Function para geracao de boletos de teste para validacao do servico
-3. **Front-end (UI)** - Interface web para interacao com o usuario, permitindo entrada do codigo e visualizacao dos resultados
-
-## Tecnologias Utilizadas
-
-| Tecnologia | Finalidade |
-|---|---|
-| Azure Functions | Computacao serverless para processamento dos boletos |
-| C# / .NET 8 | Linguagem e framework para as Azure Functions |
-| HTML/CSS/JS | Interface do usuario (camada de UI) |
-| Azure Portal | Gerenciamento e monitoramento dos recursos |
-
-## Funcionalidades
-
-- Validacao do codigo de barras de boletos bancarios (47 digitos)
-- Decodificacao do campo livre para extrair informacoes do banco emissor
-- Calculo e verificacao do digito verificador (modulo 10 e modulo 11)
-- Identificacao do banco emissor pelo codigo (001-BB, 033-Santander, 104-CEF, 237-Bradesco, 341-Itau, etc.)
-- Extracao do valor do boleto a partir do codigo de barras
-- Extracao da data de vencimento (fator de vencimento)
-- Interface web intuitiva para entrada do codigo e exibicao dos resultados
-- API REST via HTTP Trigger para integracao com outros sistemas
-
-## Estrutura do Projeto
+### Architecture
 
 ```
 azure-boleto-authenticator-service/
-|-- fnGeradorBoletos/
-|   |-- fnGeradorBoletos/       # Function para geracao de boletos
-|   |   |-- Function1.cs
-|   |   |-- Program.cs
-|   |   |-- host.json
-|   |-- fnValidaBoleto/         # Function para validacao de boletos
-|   |   |-- Function1.cs
-|   |   |-- Program.cs
-|   |   |-- host.json
-|   |-- fnGeradorBoletos.sln    # Solution .NET
-|-- Front/                      # Interface do usuario
-|   |-- index.html
-|   |-- style.css
-|   |-- script.js
+|-- src/
+|   |-- boleto/
+|   |   |-- __init__.py        # Module exports
+|   |   |-- bank_codes.py      # Bank code to name mapping
+|   |   |-- models.py          # BoletoInfo dataclass
+|   |   |-- parser.py          # Linha digitavel and barcode parser
+|   |   |-- validator.py       # Mod10 and Mod11 validation
+|-- tests/
+|   |-- test_validator.py      # 20+ unit tests
+|-- main.py                    # Demo script
+|-- requirements.txt
+|-- .gitignore
 |-- README.md
 ```
 
-## Como Executar
+### Key Features
 
-### Pre-requisitos
-- .NET 8 SDK
-- Azure Functions Core Tools v4
-- Visual Studio 2022 ou VS Code com extensao Azure Functions
-- Conta no Azure (para deploy)
+- Parse 47-digit linha digitavel format
+- Parse 44-digit barcode format
+- Bidirectional conversion between formats
+- Mod10 check digit validation (Fields 1, 2, 3)
+- Mod11 check digit validation (General barcode check)
+- Bank code identification (35+ Brazilian banks)
+- Value and due date extraction
+- Comprehensive error reporting
 
-### Execucao Local
+### Supported Banks
+
+| Code | Bank |
+|------|------|
+| 001 | Banco do Brasil |
+| 033 | Santander |
+| 104 | Caixa Economica Federal |
+| 237 | Bradesco |
+| 341 | Itau Unibanco |
+| 756 | Sicoob |
+
+And 30+ additional institutions.
+
+### How to Run
+
+```bash
+# Clone the repository
+git clone https://github.com/galafis/azure-boleto-authenticator-service.git
+cd azure-boleto-authenticator-service
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the demo
+python main.py
+
+# Run tests
+pytest tests/ -v
+```
+
+### Technologies
+
+| Technology | Purpose |
+|---|---|
+| Python 3.10+ | Core language |
+| pytest | Testing framework |
+| dataclasses | Data models |
+
+---
+
+## Portugues
+
+### Sobre o Projeto
+
+Este projeto implementa um servico para validacao e autenticacao de boletos bancarios brasileiros. Ele faz o parsing e a validacao dos formatos de 47 digitos (linha digitavel) e 44 digitos (codigo de barras), verificando digitos verificadores usando os algoritmos Mod10 e Mod11, identificando bancos emissores e extraindo informacoes de pagamento como valor e data de vencimento.
+
+### Fluxo de Validacao
+
+```mermaid
+flowchart TD
+    A[Entrada Bruta] --> B{Detectar Formato}
+    B -->|47 digitos| C[Parse Linha Digitavel]
+    B -->|44 digitos| D[Parse Codigo de Barras]
+    B -->|Outro| E[Retornar Erro]
+    C --> F[Converter para Codigo de Barras]
+    D --> G[Converter para Linha Digitavel]
+    F --> H[Extrair Codigo do Banco]
+    G --> H
+    H --> I[Consultar Nome do Banco]
+    I --> J[Extrair Valor]
+    J --> K[Extrair Data de Vencimento]
+    K --> L{Validar Digitos Verificadores}
+    L --> M[Mod10 - Campo 1]
+    L --> N[Mod10 - Campo 2]
+    L --> O[Mod10 - Campo 3]
+    L --> P[Mod11 - Geral]
+    M --> Q{Todos Validos?}
+    N --> Q
+    O --> Q
+    P --> Q
+    Q -->|Sim| R[Retornar BoletoInfo - Valido]
+    Q -->|Nao| S[Retornar BoletoInfo - Invalido + Erros]
+```
+
+### Funcionalidades Principais
+
+- Parse do formato de 47 digitos (linha digitavel)
+- Parse do formato de 44 digitos (codigo de barras)
+- Conversao bidirecional entre formatos
+- Validacao de digito verificador Mod10 (Campos 1, 2 e 3)
+- Validacao de digito verificador Mod11 (Verificacao geral do codigo de barras)
+- Identificacao de bancos por codigo (35+ bancos brasileiros)
+- Extracao de valor e data de vencimento
+- Relatorio completo de erros
+
+### Como Executar
 
 ```bash
 # Clonar o repositorio
 git clone https://github.com/galafis/azure-boleto-authenticator-service.git
 cd azure-boleto-authenticator-service
 
-# Restaurar dependencias e executar
-cd fnGeradorBoletos
-dotnet restore
-func start
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Executar o demo
+python main.py
+
+# Executar os testes
+pytest tests/ -v
 ```
 
-### Deploy no Azure
+### Tecnologias Utilizadas
 
-```bash
-# Login no Azure
-az login
+| Tecnologia | Finalidade |
+|---|---|
+| Python 3.10+ | Linguagem principal |
+| pytest | Framework de testes |
+| dataclasses | Modelos de dados |
 
-# Criar resource group
-az group create --name rg-boleto-auth --location brazilsouth
+### Referencia
 
-# Criar storage account
-az storage account create --name stboletofunc --resource-group rg-boleto-auth --location brazilsouth --sku Standard_LRS
-
-# Criar function app
-az functionapp create --name fn-boleto-authenticator --resource-group rg-boleto-auth --storage-account stboletofunc --consumption-plan-location brazilsouth --runtime dotnet-isolated --functions-version 4
-
-# Deploy
-func azure functionapp publish fn-boleto-authenticator
-```
-
-## Insights e Aprendizados
-
-- **Serverless Architecture**: Azure Functions no plano de consumo escala automaticamente para zero quando nao ha requisicoes, reduzindo custos drasticamente
-- **HTTP Triggers**: Permitem expor as functions como APIs REST, facilitando integracao com front-end e sistemas externos
-- **Managed Identity**: Possibilita conexao segura entre functions e outros servicos Azure sem necessidade de gerenciar credenciais
-- **Modulo 10 e 11**: Algoritmos fundamentais para validacao de boletos bancarios no Brasil, garantindo integridade dos dados
-- **Cold Start**: No plano de consumo, a primeira requisicao pode ter latencia maior devido ao cold start - para aplicacoes criticas, considerar plano Premium
-
-## Referencia
-
-- [Repositorio Original DIO](https://github.com/digitalinnovationone/Microsoft_Application_Platform)
 - [Documentacao Azure Functions](https://learn.microsoft.com/azure/azure-functions/)
 - [Especificacao Boleto Bancario - FEBRABAN](https://portal.febraban.org.br/)
 
-## Autor
+## Autor / Author
 
-Desenvolvido como parte do bootcamp **Microsoft Azure Cloud Native** na [DIO](https://www.dio.me/).
+**Gabriel Demetrios Lafis**
